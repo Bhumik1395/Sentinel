@@ -1,0 +1,27 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore backend/Sentinel.sln
+
+      - name: Build
+        run: dotnet build backend/Sentinel.sln --no-restore
+
+      - name: Test
+        run: dotnet test backend/Sentinel.sln --no-build --verbosity normal

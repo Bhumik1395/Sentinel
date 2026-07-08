@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "qtq5ri6T+1K8LNCdNprI2GWxFfQi8UHEmjQ6kV0yAmM=",
+  "Source": "Sentinel.Api",
+  "BasePath": "_content/Sentinel.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

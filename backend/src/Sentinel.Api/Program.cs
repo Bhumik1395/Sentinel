@@ -1,44 +1,53 @@
-var builder = WebApplication.CreateBuilder(args);
+// backend/src/Sentinel.Api/Program.cs
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
+using Sentinel.Identity;
+using Sentinel.Api;
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+var builder = WebApplication.CreateBuilder(args);
+var keycloakAuthority = builder.Configuration["Keycloak:Authority"]!;
+var keycloakAudience = builder.Configuration["Keycloak:Audience"]!;
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = keycloakAuthority;
+        options.Audience = keycloakAudience;
+        options.RequireHttpsMetadata = builder.Environment.IsProduction();
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("OwnerOnly", p => p.RequireRole("owner"));
+    options.AddPolicy("SentinelCompany", p => p.RequireRole("owner", "support-team"));
+    options.AddPolicy("CsoOrAbove", p => p.RequireRole("owner", "cso"));
+    options.AddPolicy("SecurityAdministratorOrAbove", p =>
+        p.RequireRole("owner", "cso", "security-administrator"));
+    options.AddPolicy("AnyOrganizationRole", p =>
+        p.RequireRole("cso", "security-administrator", "security-analyst"));
+});
+
+builder.Services.AddScoped<IOrganizationContext, OrganizationContext>();
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+builder.Services.AddSingleton<IAuthorizationHandler, SameOrganizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, CanManageUserHandler>();
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.UseAuthentication();
+app.UseMiddleware<OrganizationIsolationMiddleware>();
+app.UseAuthorization();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

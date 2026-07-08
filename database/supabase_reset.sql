@@ -1,4 +1,5 @@
 DROP SCHEMA IF EXISTS sentinel CASCADE;
+DROP SCHEMA IF EXISTS keycloak CASCADE;
 
 DROP TYPE IF EXISTS public.user_role CASCADE;
 DROP TYPE IF EXISTS public.user_status CASCADE;
@@ -17,6 +18,8 @@ DROP TYPE IF EXISTS public.soar_action_type CASCADE;
 DROP TYPE IF EXISTS public.soar_action_status CASCADE;
 DROP TYPE IF EXISTS public.deception_asset_type CASCADE;
 DROP TYPE IF EXISTS public.deception_asset_status CASCADE;
+DROP TYPE IF EXISTS public.approval_policy CASCADE;
+DROP TYPE IF EXISTS public.license_status CASCADE;
 
 DROP TABLE IF EXISTS public.platform_settings CASCADE;
 DROP TABLE IF EXISTS public.audit_logs CASCADE;

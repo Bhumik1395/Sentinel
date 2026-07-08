@@ -1,0 +1,12 @@
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\bin\Debug\net8.0\Sentinel.Identity.deps.json
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\bin\Debug\net8.0\Sentinel.Identity.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\bin\Debug\net8.0\Sentinel.Identity.pdb
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.AssemblyInfoInputs.cache
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.AssemblyInfo.cs
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.csproj.CoreCompileInputs.cache
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.sourcelink.json
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\refint\Sentinel.Identity.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.pdb
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\ref\Sentinel.Identity.dll
