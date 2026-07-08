@@ -13,7 +13,7 @@ services:
   neo4j:
     image: neo4j:5-community
     environment:
-      NEO4J_AUTH: neo4j/cfi3n5ksciekvr5
+      NEO4J_AUTH: neo4j/2f8c3fhn9rv9gwbor2@1
     volumes:
       - neo4j-data:/data
     ports:
@@ -46,7 +46,7 @@ services:
 #      Keycloak__Audience: "sentinel-api"
 #    depends_on:
 #      keycloak:
-#       condition: service_started
+#        condition: service_started
 #    ports:
 #      - "5000:5000"
 
