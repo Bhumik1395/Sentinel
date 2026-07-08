@@ -18,10 +18,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore backend/Sentinel.sln
+        run: dotnet restore Sentinel.sln
 
       - name: Build
-        run: dotnet build backend/Sentinel.sln --no-restore
+        run: dotnet build Sentinel.sln --no-restore
 
       - name: Test
-        run: dotnet test backend/Sentinel.sln --no-build --verbosity normal
+        run: dotnet test Sentinel.sln --no-build --verbosity normal
