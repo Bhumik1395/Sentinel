@@ -22,10 +22,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore backend/src/Sentinel.Api/Sentinel.Api.csproj
+        run: dotnet restore Sentinel.sln
 
       - name: Build
-        run: dotnet build backend/src/Sentinel.Api/Sentinel.Api.csproj --configuration Release --no-restore
+        run: dotnet build Sentinel.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test backend/src/Sentinel.Api/Sentinel.Api.csproj --configuration Release --no-build --verbosity normal
+        run: dotnet test Sentinel.sln --configuration Release --no-build --verbosity normal

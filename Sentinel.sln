@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sentinel.Api", "backend\src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sentinel.Identity", "backend\src\Sentinel.Identity\Sentinel.Identity.csproj", "{1A9C7147-248C-415B-8542-7F42CF93E354}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sentinel.Licensing", "backend\src\Sentinel.Licensing\Sentinel.Licensing.csproj", "{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,10 +30,15 @@ Global
 		{1A9C7147-248C-415B-8542-7F42CF93E354}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1A9C7147-248C-415B-8542-7F42CF93E354}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1A9C7147-248C-415B-8542-7F42CF93E354}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{675F7A48-70D3-4CAB-A58E-59349304E1F1} = {3B44B101-CC1A-48F1-BACF-6EFBFD73DEF1}
 		{91717092-BD44-4452-B4F8-6594462CB4CD} = {675F7A48-70D3-4CAB-A58E-59349304E1F1}
 		{1A9C7147-248C-415B-8542-7F42CF93E354} = {675F7A48-70D3-4CAB-A58E-59349304E1F1}
+		{B2F549D3-B6FC-4EEC-98CD-E6F0951528F7} = {675F7A48-70D3-4CAB-A58E-59349304E1F1}
 	EndGlobalSection
 EndGlobal

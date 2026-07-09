@@ -42,3 +42,10 @@ C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\obj\Debug\net
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\obj\Debug\net8.0\Sentinel.Api.pdb
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\obj\Debug\net8.0\Sentinel.Api.genruntimeconfig.cache
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\obj\Debug\net8.0\ref\Sentinel.Api.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Dapper.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Microsoft.Extensions.Configuration.Abstractions.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Microsoft.Extensions.Primitives.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Npgsql.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Sentinel.Licensing.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Api\bin\Debug\net8.0\Sentinel.Licensing.pdb

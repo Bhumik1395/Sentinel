@@ -1,0 +1,16 @@
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\bin\Debug\net8.0\Sentinel.Licensing.deps.json
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\bin\Debug\net8.0\Sentinel.Licensing.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\bin\Debug\net8.0\Sentinel.Licensing.pdb
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\bin\Debug\net8.0\Sentinel.Identity.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\bin\Debug\net8.0\Sentinel.Identity.pdb
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.csproj.AssemblyReference.cache
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.AssemblyInfoInputs.cache
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.AssemblyInfo.cs
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.csproj.CoreCompileInputs.cache
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.sourcelink.json
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.159A145E.Up2Date
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\refint\Sentinel.Licensing.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\Sentinel.Licensing.pdb
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Licensing\obj\Debug\net8.0\ref\Sentinel.Licensing.dll

@@ -10,3 +10,4 @@ C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debu
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\refint\Sentinel.Identity.dll
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.pdb
 C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\ref\Sentinel.Identity.dll
+C:\Users\Bhumik\OneDrive\Desktop\Sentinel\backend\src\Sentinel.Identity\obj\Debug\net8.0\Sentinel.Identity.csproj.AssemblyReference.cache
