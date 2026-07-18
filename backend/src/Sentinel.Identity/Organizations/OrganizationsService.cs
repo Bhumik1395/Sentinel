@@ -15,9 +15,9 @@ public interface IOrganizationsService
 public class OrganizationsService : IOrganizationsService
 {
     private readonly ISentinelDataSource _dataSource;
-    private readonly IKeycloakUserProvisioningService _provisioning;
+    private readonly IKeycloakAdminProvisioningService _provisioning;
 
-    public OrganizationsService(ISentinelDataSource dataSource, IKeycloakUserProvisioningService provisioning)
+    public OrganizationsService(ISentinelDataSource dataSource, IKeycloakAdminProvisioningService provisioning)
     {
         _dataSource = dataSource;
         _provisioning = provisioning;
@@ -46,7 +46,8 @@ public class OrganizationsService : IOrganizationsService
 
         // 2. Provision the first CSO (PRD section 6, TRD section 22 - Owner assigns first CSO, not
         // a Security Administrator; see the correction note at the top of this doc).
-        var csoKeycloakId = await _provisioning.ProvisionUserAsync(request.CsoEmail, "cso", orgId);
+        var provisioned = await _provisioning.ProvisionUserWithPasswordAsync(request.CsoEmail, "cso", orgId);
+        var csoKeycloakId = provisioned.KeycloakId;
         var csoUserId = Guid.NewGuid();
         await using (var cmd = new NpgsqlCommand(
             @"INSERT INTO users (id, keycloak_id, organization_id, role, email)
@@ -77,7 +78,7 @@ VALUES (@id, @orgId, @cap)",
 
         await tx.CommitAsync();
 
-        return new CreateOrganizationResult(orgId, csoUserId, licenseId);
+        return new CreateOrganizationResult(orgId, csoUserId, licenseId, provisioned.TemporaryPassword);
     }
 
     public async Task<IReadOnlyList<Organization>> ListOrganizationsAsync()

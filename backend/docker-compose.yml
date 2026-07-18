@@ -13,7 +13,7 @@ services:
   neo4j:
     image: neo4j:5-community
     environment:
-      NEO4J_AUTH: neo4j/2f8c3fhn9rv9gwbor2@1
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
     volumes:
       - neo4j-data:/data
     ports:
