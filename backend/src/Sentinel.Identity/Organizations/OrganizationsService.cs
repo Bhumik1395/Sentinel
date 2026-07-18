@@ -32,15 +32,16 @@ public class OrganizationsService : IOrganizationsService
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
-        // 1. Create the organization.
         var orgId = Guid.NewGuid();
+        var slug = Slugify(request.Name);
         await using (var cmd = new NpgsqlCommand(
-            "INSERT INTO organizations (id, type, name) VALUES (@id, 'CUSTOMER', @name)",
+            "INSERT INTO organizations (id, name, slug) VALUES (@id, @name, @slug)",
             conn,
             tx))
         {
             cmd.Parameters.AddWithValue("id", orgId);
             cmd.Parameters.AddWithValue("name", request.Name);
+            cmd.Parameters.AddWithValue("slug", slug);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -50,15 +51,16 @@ public class OrganizationsService : IOrganizationsService
         var csoKeycloakId = provisioned.KeycloakId;
         var csoUserId = Guid.NewGuid();
         await using (var cmd = new NpgsqlCommand(
-            @"INSERT INTO users (id, keycloak_id, organization_id, role, email)
-VALUES (@id, @keycloakId, @orgId, 'CSO', @email)",
+            @"INSERT INTO users (id, organization_id, keycloak_user_id, email, display_name, role)
+VALUES (@id, @orgId, @keycloakUserId, @email, @displayName, 'CSO')",
             conn,
             tx))
         {
             cmd.Parameters.AddWithValue("id", csoUserId);
-            cmd.Parameters.AddWithValue("keycloakId", csoKeycloakId);
             cmd.Parameters.AddWithValue("orgId", orgId);
+            cmd.Parameters.AddWithValue("keycloakUserId", csoKeycloakId.ToString());
             cmd.Parameters.AddWithValue("email", request.CsoEmail);
+            cmd.Parameters.AddWithValue("displayName", request.CsoEmail.Split('@')[0]);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -86,7 +88,7 @@ VALUES (@id, @orgId, @cap)",
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "SELECT id, type, name, created_at FROM organizations WHERE type = 'CUSTOMER' ORDER BY created_at DESC",
+            "SELECT id, name, slug, created_at FROM organizations WHERE company_scope = false ORDER BY created_at DESC",
             conn);
         await using var reader = await cmd.ExecuteReaderAsync();
 
@@ -108,7 +110,7 @@ VALUES (@id, @orgId, @cap)",
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "SELECT id, type, name, created_at FROM organizations WHERE id = @id",
+            "SELECT id, name, slug, created_at FROM organizations WHERE id = @id",
             conn);
         cmd.Parameters.AddWithValue("id", id);
 
@@ -121,5 +123,21 @@ VALUES (@id, @orgId, @cap)",
             reader.GetString(1),
             reader.GetString(2),
             reader.GetFieldValue<DateTimeOffset>(3));
+    }
+
+    private static string Slugify(string name)
+    {
+        var cleaned = new string(name
+            .ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : ' ')
+            .ToArray());
+
+        var slug = string.Join(
+            "-",
+            cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        return $"{(string.IsNullOrWhiteSpace(slug) ? "organization" : slug)}-{Guid.NewGuid():N}"[..Math.Min(
+            (string.IsNullOrWhiteSpace(slug) ? "organization" : slug).Length + 7,
+            120)];
     }
 }

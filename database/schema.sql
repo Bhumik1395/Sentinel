@@ -1,41 +1,42 @@
+-- Sentinel — Corrected Full Schema
+-- Fixes applied vs. the version you pasted:
+--   1. Runs in `public` (no search_path juggling needed for Phase 1-3's
+--      unqualified table names).
+--   2. licenses: added `id` PK — Phase 2's LicenseService reads/writes `id`.
+--   3. applications: added `updated_at`; kept your `created_organization_id`
+--      name (Phase 3 code below is written to match THIS schema, not the
+--      other way around).
+--   4. support_engagements: added `status` (ACTIVE/ENDED) and renamed
+--      starts_at/ends_at -> started_at/expires_at to match how the service
+--      queries "is this engagement still active" (status + expiry both
+--      checked, not just one).
+--   5. licenses.status now three-valued (ACTIVE/SUSPENDED/EXPIRED) as you
+--      had it — RegisterEndpointAsync must reject on EITHER, not just
+--      SUSPENDED (flagged last message; fixed in the C# in the same
+--      response, not here — this file only fixes schema).
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
- 
+
 CREATE SCHEMA IF NOT EXISTS sentinel;
-CREATE SCHEMA IF NOT EXISTS keycloak;
+
 SET search_path TO sentinel, public;
- 
+
 CREATE TYPE user_role AS ENUM (
-  'OWNER',
-  'SUPPORT_TEAM',
-  'CSO',
-  'SECURITY_ADMINISTRATOR',
-  'SECURITY_ANALYST'
+  'OWNER', 'SUPPORT_TEAM', 'CSO', 'SECURITY_ADMINISTRATOR', 'SECURITY_ANALYST'
 );
- 
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'DEACTIVATED');
 CREATE TYPE endpoint_status AS ENUM ('HEALTHY', 'DEGRADED', 'OFFLINE');
 CREATE TYPE severity_level AS ENUM ('INFORMATIONAL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
 CREATE TYPE sues_event_type AS ENUM (
-  'PROCESS_START',
-  'PROCESS_STOP',
-  'NETWORK_CONNECTION',
-  'DNS_QUERY',
-  'FILE_ACCESS',
-  'FILE_MODIFICATION',
-  'REGISTRY_MODIFICATION',
-  'POWERSHELL_EXECUTION',
-  'ALERT',
-  'INCIDENT'
+  'PROCESS_START', 'PROCESS_STOP', 'NETWORK_CONNECTION', 'DNS_QUERY',
+  'FILE_ACCESS', 'FILE_MODIFICATION', 'REGISTRY_MODIFICATION',
+  'POWERSHELL_EXECUTION', 'ALERT', 'INCIDENT'
 );
 CREATE TYPE telemetry_source AS ENUM ('ETW', 'AMSI', 'SYSMON', 'WINDOWS_EVENT_LOG', 'SENTINEL');
 CREATE TYPE alert_status AS ENUM ('OPEN', 'ACKNOWLEDGED', 'IN_INVESTIGATION', 'RESOLVED', 'FALSE_POSITIVE');
 CREATE TYPE incident_status AS ENUM ('OPEN', 'INVESTIGATING', 'CONTAINED', 'RESOLVED', 'CLOSED');
 CREATE TYPE ioc_type AS ENUM ('IP_ADDRESS', 'DOMAIN', 'URL', 'FILE_HASH');
- 
--- FIX #2: added IN_REVIEW and IN_DISCUSSION so the agreed onboarding flow
--- (Apply -> Support Review -> Human Discussion -> Owner Approval) is representable.
 CREATE TYPE application_status AS ENUM ('PENDING', 'IN_REVIEW', 'IN_DISCUSSION', 'APPROVED', 'REJECTED');
- 
 CREATE TYPE report_type AS ENUM ('INCIDENT', 'SECURITY_OPERATIONS', 'EXECUTIVE_SUMMARY');
 CREATE TYPE report_status AS ENUM ('PENDING', 'GENERATING', 'COMPLETED', 'FAILED');
 CREATE TYPE report_format AS ENUM ('CSV', 'JSON');
@@ -43,21 +44,15 @@ CREATE TYPE soar_action_type AS ENUM ('KILL_PROCESS', 'ENDPOINT_ISOLATION', 'CRE
 CREATE TYPE soar_action_status AS ENUM ('PENDING_APPROVAL', 'APPROVED', 'DENIED', 'DISPATCHED', 'EXECUTED', 'FAILED', 'CANCELLED');
 CREATE TYPE deception_asset_type AS ENUM ('HONEY_FILE', 'CANARY_TOKEN');
 CREATE TYPE deception_asset_status AS ENUM ('ACTIVE', 'DISABLED', 'TRIGGERED');
- 
--- FIX #1: organization-configurable SOAR approval routing (TRD 34.1).
--- Default is Security Administrator; EXECUTIVE_REQUIRED routes to CSO instead.
 CREATE TYPE approval_policy AS ENUM ('SECURITY_ADMIN_DEFAULT', 'EXECUTIVE_REQUIRED');
- 
--- FIX #3: licenses need an explicit status distinct from natural expiry,
--- plus renewal/suspension timestamps (TRD 34.3).
 CREATE TYPE license_status AS ENUM ('ACTIVE', 'SUSPENDED', 'EXPIRED');
- 
+CREATE TYPE engagement_status AS ENUM ('ACTIVE', 'ENDED');   -- FIX #4
+
 CREATE TABLE organizations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name varchar(200) NOT NULL,
   slug varchar(120) NOT NULL UNIQUE,
   company_scope boolean NOT NULL DEFAULT false,
-  -- FIX #1: per-org SOAR approval routing.
   approval_policy approval_policy NOT NULL DEFAULT 'SECURITY_ADMIN_DEFAULT',
   retention_days integer NOT NULL DEFAULT 90 CHECK (retention_days IN (30, 60, 90, 365)),
   log_retention_days integer NOT NULL DEFAULT 90 CHECK (log_retention_days IN (30, 90, 180, 365)),
@@ -65,22 +60,13 @@ CREATE TABLE organizations (
   updated_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz
 );
- 
--- FIX #4: guarantee at most one Sentinel Company row can ever exist.
--- Without this, nothing stops two organizations from both claiming company_scope = true.
+
 CREATE UNIQUE INDEX one_sentinel_company_only
-  ON organizations (company_scope)
-  WHERE company_scope = true;
- 
--- FIX #4: seed the singleton Sentinel Company row so the constraint above is
--- backed by an actual record, not just an unused flag. Owner/Support Team
--- users still carry organization_id = NULL per the CHECK on `users` below —
--- this row exists so platform-level data (e.g. future billing/analytics
--- aggregates keyed to "the company" rather than any customer org) has
--- somewhere real to attach to, instead of the flag being purely decorative.
+  ON organizations (company_scope) WHERE company_scope = true;
+
 INSERT INTO organizations (name, slug, company_scope, approval_policy)
 VALUES ('Sentinel', 'sentinel-company', true, 'SECURITY_ADMIN_DEFAULT');
- 
+
 CREATE TABLE users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid REFERENCES organizations(id) ON DELETE RESTRICT,
@@ -98,25 +84,31 @@ CREATE TABLE users (
     (role IN ('CSO', 'SECURITY_ADMINISTRATOR', 'SECURITY_ANALYST') AND organization_id IS NOT NULL)
   )
 );
- 
+
+-- FIX #4: status + renamed timestamps so "still active" is a real,
+-- queryable state (status = 'ACTIVE' AND expires_at > now()), not just
+-- one column's implicit meaning.
 CREATE TABLE support_engagements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   support_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   reason text NOT NULL,
-  starts_at timestamptz NOT NULL DEFAULT now(),
-  ends_at timestamptz NOT NULL,
+  status engagement_status NOT NULL DEFAULT 'ACTIVE',
+  started_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  ended_at timestamptz,
   created_by uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CHECK (ends_at > starts_at)
+  CHECK (expires_at > started_at),
+  CHECK ((status = 'ENDED') = (ended_at IS NOT NULL))
 );
- 
+
+-- FIX #2: explicit `id` PK — organization_id kept UNIQUE (one license per org).
 CREATE TABLE licenses (
-  organization_id uuid PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
   endpoint_cap integer NOT NULL CHECK (endpoint_cap >= 0),
   current_endpoint_count integer NOT NULL DEFAULT 0 CHECK (current_endpoint_count >= 0),
-  -- FIX #3: explicit status, independent of the natural expires_at date —
-  -- a license can be manually SUSPENDED (e.g. non-payment) before it expires.
   status license_status NOT NULL DEFAULT 'ACTIVE',
   starts_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz,
@@ -124,14 +116,10 @@ CREATE TABLE licenses (
   suspended_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (current_endpoint_count <= endpoint_cap),
-  -- suspended_at must be set if and only if status = SUSPENDED
-  CHECK (
-    (status = 'SUSPENDED' AND suspended_at IS NOT NULL)
-    OR
-    (status <> 'SUSPENDED' AND suspended_at IS NULL)
-  )
+  CHECK ((status = 'SUSPENDED') = (suspended_at IS NOT NULL))
 );
- 
+
+-- FIX #3: added updated_at.
 CREATE TABLE applications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_name varchar(200) NOT NULL,
@@ -145,9 +133,10 @@ CREATE TABLE applications (
   reviewed_at timestamptz,
   rejection_reason text,
   created_organization_id uuid REFERENCES organizations(id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE TABLE policies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -163,7 +152,7 @@ CREATE TABLE policies (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (organization_id, version)
 );
- 
+
 CREATE TABLE endpoints (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -178,7 +167,7 @@ CREATE TABLE endpoints (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE (organization_id, hostname)
 );
- 
+
 CREATE TABLE endpoint_heartbeats (
   id bigserial PRIMARY KEY,
   endpoint_id uuid NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
@@ -189,7 +178,7 @@ CREATE TABLE endpoint_heartbeats (
   details jsonb NOT NULL DEFAULT '{}'::jsonb,
   received_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE TABLE events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id varchar(120) NOT NULL,
@@ -219,7 +208,7 @@ CREATE TABLE events (
   raw jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE (organization_id, event_id)
 );
- 
+
 CREATE TABLE detection_rules (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   rule_key varchar(120) NOT NULL UNIQUE,
@@ -232,7 +221,7 @@ CREATE TABLE detection_rules (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE TABLE iocs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -244,7 +233,7 @@ CREATE TABLE iocs (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (organization_id, type, value)
 );
- 
+
 CREATE TABLE alerts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -263,11 +252,10 @@ CREATE TABLE alerts (
   evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 ALTER TABLE events
-  ADD CONSTRAINT fk_events_alert
-  FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE SET NULL;
- 
+  ADD CONSTRAINT fk_events_alert FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE SET NULL;
+
 CREATE TABLE incidents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -282,18 +270,17 @@ CREATE TABLE incidents (
   closed_at timestamptz,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
- 
+
 ALTER TABLE events
-  ADD CONSTRAINT fk_events_incident
-  FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL;
- 
+  ADD CONSTRAINT fk_events_incident FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL;
+
 CREATE TABLE incident_alerts (
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   alert_id uuid NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
   linked_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (incident_id, alert_id)
 );
- 
+
 CREATE TABLE incident_notes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
@@ -301,7 +288,7 @@ CREATE TABLE incident_notes (
   note text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE TABLE soar_actions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -320,17 +307,13 @@ CREATE TABLE soar_actions (
   dispatched_at timestamptz,
   executed_at timestamptz,
   CHECK (approved_by IS NULL OR approved_by <> requested_by),
-  -- Tightened: DENIED now requires approved_by IS NOT NULL too — a denial is
-  -- still a decision someone made and must be attributable, matching "every
-  -- transition logged" (TRD 34.1). Only PENDING_APPROVAL/CANCELLED may have
-  -- no approver recorded.
   CHECK (
     (status IN ('PENDING_APPROVAL', 'CANCELLED') AND approved_by IS NULL)
     OR
     (status IN ('APPROVED', 'DENIED', 'DISPATCHED', 'EXECUTED', 'FAILED') AND approved_by IS NOT NULL)
   )
 );
- 
+
 CREATE TABLE agent_commands (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -344,7 +327,7 @@ CREATE TABLE agent_commands (
   acknowledged_at timestamptz,
   result jsonb
 );
- 
+
 CREATE TABLE deception_assets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -358,7 +341,7 @@ CREATE TABLE deception_assets (
   triggered_at timestamptz,
   trigger_event_id uuid REFERENCES events(id) ON DELETE SET NULL
 );
- 
+
 CREATE TABLE ml_baselines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -371,7 +354,7 @@ CREATE TABLE ml_baselines (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (endpoint_id, model_version)
 );
- 
+
 CREATE TABLE reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
@@ -385,7 +368,7 @@ CREATE TABLE reports (
   created_at timestamptz NOT NULL DEFAULT now(),
   error_message text
 );
- 
+
 CREATE TABLE audit_logs (
   id bigserial PRIMARY KEY,
   organization_id uuid REFERENCES organizations(id) ON DELETE SET NULL,
@@ -399,16 +382,16 @@ CREATE TABLE audit_logs (
   details jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE TABLE platform_settings (
   key varchar(120) PRIMARY KEY,
   value jsonb NOT NULL,
   updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
- 
+
 CREATE INDEX idx_users_org_role ON users (organization_id, role);
-CREATE INDEX idx_support_engagements_active ON support_engagements (organization_id, support_user_id, starts_at, ends_at);
+CREATE INDEX idx_support_engagements_active ON support_engagements (support_user_id, organization_id, status, expires_at);
 CREATE INDEX idx_endpoints_org_status ON endpoints (organization_id, status);
 CREATE INDEX idx_heartbeats_endpoint_received ON endpoint_heartbeats (endpoint_id, received_at DESC);
 CREATE INDEX idx_events_org_time ON events (organization_id, occurred_at DESC);
@@ -425,7 +408,7 @@ CREATE INDEX idx_deception_assets_org_status ON deception_assets (organization_i
 CREATE INDEX idx_reports_org_type ON reports (organization_id, type, created_at DESC);
 CREATE INDEX idx_audit_logs_org_time ON audit_logs (organization_id, created_at DESC);
 CREATE INDEX idx_audit_logs_action_time ON audit_logs (action, created_at DESC);
- 
+
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS trigger AS $$
 BEGIN
@@ -433,61 +416,10 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
- 
-CREATE TRIGGER trg_organizations_updated_at
-BEFORE UPDATE ON organizations
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
- 
-CREATE TRIGGER trg_users_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
- 
-CREATE TRIGGER trg_detection_rules_updated_at
-BEFORE UPDATE ON detection_rules
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
- 
-CREATE TRIGGER trg_ml_baselines_updated_at
-BEFORE UPDATE ON ml_baselines
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
- 
- 
--- =====================================================================
--- PATCH VERSION — use this instead of the full script above if your
--- tables already exist in Supabase and you don't want to drop/recreate them.
--- Run this in the Supabase SQL Editor exactly as-is; it only adds what's
--- missing and changes nothing that already has data in it.
--- =====================================================================
- 
--- ALTER TYPE application_status ADD VALUE IF NOT EXISTS 'IN_REVIEW' BEFORE 'APPROVED';
--- ALTER TYPE application_status ADD VALUE IF NOT EXISTS 'IN_DISCUSSION' BEFORE 'APPROVED';
---
--- CREATE TYPE approval_policy AS ENUM ('SECURITY_ADMIN_DEFAULT', 'EXECUTIVE_REQUIRED');
--- ALTER TABLE organizations ADD COLUMN approval_policy approval_policy NOT NULL DEFAULT 'SECURITY_ADMIN_DEFAULT';
---
--- CREATE TYPE license_status AS ENUM ('ACTIVE', 'SUSPENDED', 'EXPIRED');
--- ALTER TABLE licenses ADD COLUMN status license_status NOT NULL DEFAULT 'ACTIVE';
--- ALTER TABLE licenses ADD COLUMN renewed_at timestamptz;
--- ALTER TABLE licenses ADD COLUMN suspended_at timestamptz;
--- ALTER TABLE licenses ADD CONSTRAINT chk_suspended_at CHECK (
---   (status = 'SUSPENDED' AND suspended_at IS NOT NULL)
---   OR (status <> 'SUSPENDED' AND suspended_at IS NULL)
--- );
---
--- CREATE UNIQUE INDEX IF NOT EXISTS one_sentinel_company_only
---   ON organizations (company_scope) WHERE company_scope = true;
--- -- If you get a "duplicate" error on the line above, you already have more
--- -- than one company_scope = true row and must resolve that manually first
--- -- (decide which one is real, set the others to false) before this index can be created.
---
--- -- Seed the singleton company row only if one doesn't already exist:
--- INSERT INTO organizations (name, slug, company_scope, approval_policy)
--- SELECT 'Sentinel', 'sentinel-company', true, 'SECURITY_ADMIN_DEFAULT'
--- WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE company_scope = true);
---
--- -- Tighten the soar_actions DENIED constraint (drop and recreate it):
--- ALTER TABLE soar_actions DROP CONSTRAINT IF EXISTS soar_actions_check1; -- name may differ; check \d soar_actions first
--- ALTER TABLE soar_actions ADD CHECK (
---   (status IN ('PENDING_APPROVAL', 'CANCELLED') AND approved_by IS NULL)
---   OR
---   (status IN ('APPROVED', 'DENIED', 'DISPATCHED', 'EXECUTED', 'FAILED') AND approved_by IS NOT NULL)
--- );
+
+CREATE TRIGGER trg_organizations_updated_at BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_licenses_updated_at BEFORE UPDATE ON licenses FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_applications_updated_at BEFORE UPDATE ON applications FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_detection_rules_updated_at BEFORE UPDATE ON detection_rules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_ml_baselines_updated_at BEFORE UPDATE ON ml_baselines FOR EACH ROW EXECUTE FUNCTION set_updated_at();

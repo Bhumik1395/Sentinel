@@ -107,6 +107,12 @@ FROM licenses WHERE organization_id = @orgId FOR UPDATE",
             return new RegisterEndpointResult(RegistrationOutcome.LicenseSuspended, null);
         }
 
+        if (status == "EXPIRED")
+        {
+            await tx.RollbackAsync();
+            return new RegisterEndpointResult(RegistrationOutcome.LicenseExpired, null);
+        }
+
         if (current >= cap)
         {
             await tx.RollbackAsync();
@@ -115,13 +121,15 @@ FROM licenses WHERE organization_id = @orgId FOR UPDATE",
 
         var endpointId = Guid.NewGuid();
         await using (var insertCmd = new NpgsqlCommand(
-            "INSERT INTO endpoints (id, organization_id, hostname) VALUES (@id, @orgId, @hostname)",
+            @"INSERT INTO endpoints (id, organization_id, hostname, agent_version)
+VALUES (@id, @orgId, @hostname, @agentVersion)",
             conn,
             tx))
         {
             insertCmd.Parameters.AddWithValue("id", endpointId);
             insertCmd.Parameters.AddWithValue("orgId", request.OrganizationId);
             insertCmd.Parameters.AddWithValue("hostname", request.Hostname);
+            insertCmd.Parameters.AddWithValue("agentVersion", request.AgentVersion);
             await insertCmd.ExecuteNonQueryAsync();
         }
 

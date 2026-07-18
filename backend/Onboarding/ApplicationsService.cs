@@ -72,7 +72,7 @@ public class ApplicationsService : IApplicationsService
 
         await using var cmd = new NpgsqlCommand(
             @"SELECT id, company_name, contact_name, contact_email, requested_endpoint_cap,
-                notes, status::text, organization_id, created_at
+                notes, status::text, created_organization_id, created_at
               FROM applications
               ORDER BY created_at DESC",
             conn);
@@ -126,7 +126,7 @@ public class ApplicationsService : IApplicationsService
 
         await using var cmd = new NpgsqlCommand(
             @"UPDATE applications
-              SET status = 'APPROVED', organization_id = @orgId, updated_at = now()
+              SET status = 'APPROVED', created_organization_id = @orgId, updated_at = now()
               WHERE id = @id",
             conn);
 

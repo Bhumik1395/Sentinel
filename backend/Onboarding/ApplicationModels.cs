@@ -16,7 +16,7 @@ public record Application(
     int RequestedEndpointCap,
     string? Notes,
     string Status,
-    Guid? OrganizationId,
+    Guid? CreatedOrganizationId,
     DateTimeOffset CreatedAt);
 
 public record ApproveApplicationResult(

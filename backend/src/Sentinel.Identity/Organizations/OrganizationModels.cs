@@ -1,6 +1,6 @@
 namespace Sentinel.Identity.Organizations;
 
-public record Organization(Guid Id, string Type, string Name, DateTimeOffset CreatedAt);
+public record Organization(Guid Id, string Name, string Slug, DateTimeOffset CreatedAt);
 
 public record CreateOrganizationRequest(string Name, string CsoEmail, int EndpointCap);
 

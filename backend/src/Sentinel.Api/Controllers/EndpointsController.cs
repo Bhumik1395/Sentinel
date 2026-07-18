@@ -20,6 +20,7 @@ public class EndpointsController : ControllerBase
             RegistrationOutcome.Registered => Ok(new { endpointId = result.EndpointId }),
             RegistrationOutcome.CapReached => Conflict(new { error = "Endpoint cap reached for this organization." }),
             RegistrationOutcome.LicenseSuspended => Conflict(new { error = "Organization license is suspended." }),
+            RegistrationOutcome.LicenseExpired => Conflict(new { error = "Organization license is expired." }),
             _ => StatusCode(500)
         };
     }

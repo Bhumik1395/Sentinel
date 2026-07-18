@@ -10,14 +10,16 @@ public record License(
 
 public record RegisterEndpointRequest(
     Guid OrganizationId,
-    string Hostname
+    string Hostname,
+    string AgentVersion = "unknown"
 );
 
 public enum RegistrationOutcome
 {
     Registered,
     CapReached,
-    LicenseSuspended
+    LicenseSuspended,
+    LicenseExpired
 }
 
 public record RegisterEndpointResult(RegistrationOutcome Outcome, Guid? EndpointId);
