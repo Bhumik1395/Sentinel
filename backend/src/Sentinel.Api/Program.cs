@@ -47,7 +47,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IOrganizationContext, OrganizationContext>();
 builder.Services.AddSingleton<ISentinelDataSource, SentinelDataSource>();
 builder.Services.AddScoped<IOrganizationsService, OrganizationsService>();
-builder.Services.AddScoped<IKeycloakUserProvisioningService, StubKeycloakUserProvisioningService>();
+builder.Services.AddScoped<IKeycloakAdminProvisioningService, StubKeycloakAdminProvisioningService>();
 builder.Services.AddScoped<ISupportEngagementService, SupportEngagementService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();

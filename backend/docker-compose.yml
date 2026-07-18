@@ -32,7 +32,7 @@ services:
       KC_DB_USERNAME: ${SUPABASE_DB_USERNAME}
       KC_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
     volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./Keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
     ports:
       - "8080:8080"
 
