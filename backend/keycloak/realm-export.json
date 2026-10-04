@@ -3,25 +3,23 @@
     "enabled": true,
     "roles": {
         "realm": [
+            { "name": "owner", "description": "Sentinel Company - platform owner" },
+            { "name": "support-team", "description": "Sentinel Company - platform-wide support role" },
+            { "name": "cso", "description": "Customer Organization - executive role" },
+            { "name": "security-administrator", "description": "Customer Organization - operational admin" },
+            { "name": "security-analyst", "description": "Customer Organization - investigation role" }
+        ]
+    },
+    "components": {
+        "org.keycloak.userprofile.UserProfileProvider": [
             {
-                "name": "owner",
-                "description": "Sentinel Company - platform owner"
-            },
-            {
-                "name": "support-team",
-                "description": "Sentinel Company - platform-wide support role"
-            },
-            {
-                "name": "cso",
-                "description": "Customer Organization - executive role"
-            },
-            {
-                "name": "security-administrator",
-                "description": "Customer Organization - operational admin"
-            },
-            {
-                "name": "security-analyst",
-                "description": "Customer Organization - investigation role"
+                "providerId": "declarative-user-profile",
+                "subComponents": {},
+                "config": {
+                    "kc.user.profile.config": [
+                        "{\"attributes\":[{\"name\":\"username\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"email\",\"validations\":{\"email\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"organizationId\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}]}"
+                    ]
+                }
             }
         ]
     },
@@ -29,14 +27,39 @@
         {
             "clientId": "sentinel-dashboard",
             "publicClient": true,
-            "redirectUris": [
-                "http://localhost:3000/*"
-            ],
-            "webOrigins": [
-                "http://localhost:3000"
-            ],
+            "redirectUris": [ "http://localhost:3000/*" ],
+            "webOrigins": [ "http://localhost:3000" ],
             "standardFlowEnabled": true,
-            "directAccessGrantsEnabled": false
+            "directAccessGrantsEnabled": false,
+            "attributes": {
+                "pkce.code.challenge.method": "S256",
+                "post.logout.redirect.uris": "http://localhost:3000/*"
+            },
+            "protocolMappers": [
+                {
+                    "name": "organizationId",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-attribute-mapper",
+                    "config": {
+                        "user.attribute": "organizationId",
+                        "claim.name": "organizationId",
+                        "jsonType.label": "String",
+                        "access.token.claim": "true",
+                        "id.token.claim": "true",
+                        "userinfo.token.claim": "true"
+                    }
+                },
+                {
+                    "name": "sentinel-api-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "config": {
+                        "included.client.audience": "sentinel-api",
+                        "access.token.claim": "true",
+                        "id.token.claim": "false"
+                    }
+                }
+            ]
         },
         {
             "clientId": "sentinel-api",
@@ -65,15 +88,17 @@
             "username": "bootstrap-owner",
             "enabled": true,
             "credentials": [
-                {
-                    "type": "password",
-                    "value": "change-this-password",
-                    "temporary": true
-                }
+                { "type": "password", "value": "change-this-password", "temporary": true }
             ],
-            "realmRoles": [
-                "owner"
-            ]
+            "realmRoles": [ "owner" ]
+        },
+        {
+            "username": "service-account-sentinel-api",
+            "enabled": true,
+            "serviceAccountClientId": "sentinel-api",
+            "clientRoles": {
+                "realm-management": [ "manage-users", "view-users", "query-users", "view-realm" ]
+            }
         }
     ]
 }

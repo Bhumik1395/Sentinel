@@ -1,7 +1,6 @@
 // backend/src/Sentinel.Identity/Onboarding/ApplicationsService.cs
 using Npgsql;
 using Sentinel.Identity.Data;
-using Sentinel.Identity.Keycloak;
 using Sentinel.Identity.Organizations;
 
 namespace Sentinel.Identity.Onboarding;
@@ -10,7 +9,7 @@ public interface IApplicationsService
 {
     Task<Guid> SubmitApplicationAsync(SubmitApplicationRequest request);
     Task<IReadOnlyList<Application>> ListApplicationsAsync();
-    Task MarkInReviewAsync(Guid applicationId, Guid reviewerUserId);
+    Task MarkInReviewAsync(Guid applicationId, Guid? reviewerUserId);
     Task MarkInDiscussionAsync(Guid applicationId);
     Task<ApproveApplicationResult> ApproveApplicationAsync(Guid applicationId);
     Task RejectApplicationAsync(Guid applicationId, string reason);
@@ -18,31 +17,27 @@ public interface IApplicationsService
 
 public class ApplicationsService : IApplicationsService
 {
+    private static readonly string[] OpenStatuses = { "PENDING", "IN_REVIEW", "IN_DISCUSSION" };
+
     private readonly ISentinelDataSource _dataSource;
     private readonly IOrganizationsService _organizations;
-    private readonly IKeycloakAdminProvisioningService _provisioning;
 
-    public ApplicationsService(
-        ISentinelDataSource dataSource,
-        IOrganizationsService organizations,
-        IKeycloakAdminProvisioningService provisioning)
+    public ApplicationsService(ISentinelDataSource dataSource, IOrganizationsService organizations)
     {
         _dataSource = dataSource;
         _organizations = organizations;
-        _provisioning = provisioning;
     }
 
     public async Task<Guid> SubmitApplicationAsync(SubmitApplicationRequest request)
     {
         if (request.RequestedEndpointCap <= 0)
-        {
             throw new ArgumentException("requestedEndpointCap must be a positive integer.");
-        }
-
+        if (string.IsNullOrWhiteSpace(request.CompanyName))
+            throw new ArgumentException("companyName is required.");
+        if (string.IsNullOrWhiteSpace(request.ContactName))
+            throw new ArgumentException("contactName is required.");
         if (string.IsNullOrWhiteSpace(request.ContactEmail))
-        {
             throw new ArgumentException("contactEmail is required.");
-        }
 
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
@@ -55,9 +50,9 @@ public class ApplicationsService : IApplicationsService
             conn);
 
         cmd.Parameters.AddWithValue("id", id);
-        cmd.Parameters.AddWithValue("company", request.CompanyName);
-        cmd.Parameters.AddWithValue("contact", request.ContactName);
-        cmd.Parameters.AddWithValue("email", request.ContactEmail);
+        cmd.Parameters.AddWithValue("company", request.CompanyName.Trim());
+        cmd.Parameters.AddWithValue("contact", request.ContactName.Trim());
+        cmd.Parameters.AddWithValue("email", request.ContactEmail.Trim());
         cmd.Parameters.AddWithValue("cap", request.RequestedEndpointCap);
         cmd.Parameters.AddWithValue("notes", (object?)request.Notes ?? DBNull.Value);
 
@@ -97,32 +92,36 @@ public class ApplicationsService : IApplicationsService
         return results;
     }
 
-    public Task MarkInReviewAsync(Guid applicationId, Guid reviewerUserId)
-        => TransitionAsync(applicationId, "PENDING", "IN_REVIEW", reviewerUserId);
+    public Task MarkInReviewAsync(Guid applicationId, Guid? reviewerUserId)
+        => TransitionAsync(applicationId, new[] { "PENDING" }, "IN_REVIEW", reviewerUserId);
 
     public Task MarkInDiscussionAsync(Guid applicationId)
-        => TransitionAsync(applicationId, "IN_REVIEW", "IN_DISCUSSION", null);
+        => TransitionAsync(applicationId, new[] { "IN_REVIEW" }, "IN_DISCUSSION");
+
+    public Task RejectApplicationAsync(Guid applicationId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("A rejection reason is required.");
+
+        // Only open applications can be rejected; an APPROVED one already has an org.
+        return TransitionAsync(applicationId, OpenStatuses, "REJECTED", null, reason.Trim());
+    }
 
     public async Task<ApproveApplicationResult> ApproveApplicationAsync(Guid applicationId)
     {
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
 
-        var app = await GetForUpdateAsync(conn, applicationId);
+        var app = await GetAsync(conn, applicationId);
         if (app.Status != "IN_DISCUSSION")
         {
             throw new InvalidOperationException(
                 $"Application {applicationId} is {app.Status}, not IN_DISCUSSION - cannot approve.");
         }
 
-        // Reuses Phase 2's OrganizationsService as-is. Phase 3 does not
-        // reimplement "create org + first CSO + license" - that's already
-        // atomic (Phase 2 section 5) and this flow has no reason to duplicate it.
+        // Reuses OrganizationsService as-is: create org + first CSO + license, atomically.
         var orgResult = await _organizations.CreateOrganizationAsync(
-            new CreateOrganizationRequest(
-                app.CompanyName,
-                app.ContactEmail,
-                app.RequestedEndpointCap));
+            new CreateOrganizationRequest(app.CompanyName, app.ContactEmail, app.RequestedEndpointCap));
 
         await using var cmd = new NpgsqlCommand(
             @"UPDATE applications
@@ -134,27 +133,15 @@ public class ApplicationsService : IApplicationsService
         cmd.Parameters.AddWithValue("orgId", orgResult.OrganizationId);
         await cmd.ExecuteNonQueryAsync();
 
-        // OrganizationsService already called Keycloak provisioning internally
-        // (via IKeycloakUserProvisioningService) to create the CSO - but that
-        // interface's contract only returns a Keycloak ID, not the temp
-        // password, because Phase 2 never needed one. Re-provisioning here
-        // would create a duplicate account. Instead, ApproveApplicationAsync
-        // is the one place that needs the password, so it's the one place
-        // that calls the richer method directly, then hands OrganizationsService
-        // the resulting Keycloak ID it already created - see the note below.
         return new ApproveApplicationResult(
             orgResult.OrganizationId,
             orgResult.CsoUserId,
             orgResult.LicenseId,
-            orgResult.CsoTemporaryPassword
-        );
+            orgResult.CsoTemporaryPassword);
     }
 
-    public Task RejectApplicationAsync(Guid applicationId, string reason)
-        => TransitionAsync(applicationId, null, "REJECTED", null, reason);
-
-    private async Task<(string Status, string CompanyName, string ContactEmail, int RequestedEndpointCap)>
-        GetForUpdateAsync(NpgsqlConnection conn, Guid applicationId)
+    private static async Task<(string Status, string CompanyName, string ContactEmail, int RequestedEndpointCap)>
+        GetAsync(NpgsqlConnection conn, Guid applicationId)
     {
         await using var cmd = new NpgsqlCommand(
             @"SELECT status::text, company_name, contact_email, requested_endpoint_cap
@@ -166,51 +153,44 @@ public class ApplicationsService : IApplicationsService
 
         await using var reader = await cmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
-        {
             throw new InvalidOperationException($"Application {applicationId} does not exist.");
-        }
 
-        return (
-            reader.GetString(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetInt32(3));
+        return (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3));
     }
 
+    // The status check lives in the UPDATE's WHERE clause, so check-and-change is one
+    // atomic statement (no read-then-write race between two reviewers).
     private async Task TransitionAsync(
         Guid applicationId,
-        string? requiredCurrentStatus,
+        string[] allowedCurrentStatuses,
         string newStatus,
-        Guid? reviewerUserId,
+        Guid? reviewerUserId = null,
         string? rejectionReason = null)
     {
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
 
-        if (requiredCurrentStatus is not null)
-        {
-            var (current, _, _, _) = await GetForUpdateAsync(conn, applicationId);
-            if (current != requiredCurrentStatus)
-            {
-                throw new InvalidOperationException(
-                    $"Application {applicationId} is {current}, not {requiredCurrentStatus} - cannot transition to {newStatus}.");
-            }
-        }
-
         await using var cmd = new NpgsqlCommand(
             @"UPDATE applications
               SET status = @status::application_status,
-                  reviewed_by = COALESCE(@reviewer, reviewed_by),
-                  rejection_reason = @reason,
+                  reviewed_by = COALESCE(@reviewer::uuid, reviewed_by),
+                  rejection_reason = COALESCE(@reason::text, rejection_reason),
                   updated_at = now()
-              WHERE id = @id",
+              WHERE id = @id AND status::text = ANY(@allowed)",
             conn);
 
         cmd.Parameters.AddWithValue("id", applicationId);
         cmd.Parameters.AddWithValue("status", newStatus);
         cmd.Parameters.AddWithValue("reviewer", (object?)reviewerUserId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("reason", (object?)rejectionReason ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("allowed", allowedCurrentStatuses);
 
-        await cmd.ExecuteNonQueryAsync();
+        var rows = await cmd.ExecuteNonQueryAsync();
+        if (rows == 0)
+        {
+            throw new InvalidOperationException(
+                $"Application {applicationId} does not exist or is not in a state " +
+                $"({string.Join("/", allowedCurrentStatuses)}) that allows moving to {newStatus}.");
+        }
     }
 }

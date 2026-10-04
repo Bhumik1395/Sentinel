@@ -14,9 +14,10 @@ public class SentinelDataSource : ISentinelDataSource
 
     public SentinelDataSource(IConfiguration configuration)
     {
-        _connectionString = configuration.GetConnectionString("Postgres")
+        _connectionString = configuration.GetConnectionString("Sentinel")
             ?? throw new InvalidOperationException(
-                "ConnectionStrings:Postgres is missing. Check appsettings.json / environment variables.");
+                "ConnectionStrings:Sentinel is missing. Set it with user-secrets or the " +
+                "ConnectionStrings__Sentinel environment variable.");
     }
 
     public NpgsqlConnection CreateConnection() => new(_connectionString);

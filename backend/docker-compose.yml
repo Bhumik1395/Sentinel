@@ -26,13 +26,17 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_DB: postgres
-      KC_DB_URL: ${SUPABASE_DB_URL_JDBC}
-      KC_DB_SCHEMA: keycloak
-      KC_DB_USERNAME: ${SUPABASE_DB_USERNAME}
-      KC_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      # No KC_DB_* here: start-dev uses Keycloak's embedded database, persisted in the
+      # keycloak-data volume below. To share your local Postgres instead, add:
+      #   KC_DB: postgres
+      #   KC_DB_URL: jdbc:postgresql://host.docker.internal:5432/sentinel
+      #   KC_DB_SCHEMA: keycloak          (run: CREATE SCHEMA keycloak;)
+      #   KC_DB_USERNAME / KC_DB_PASSWORD
     volumes:
-      - ./Keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - keycloak-data:/opt/keycloak/data/h2
+      # Directory name is lowercase to match the repo (backend/keycloak). The old
+      # ./Keycloak path only worked on case-insensitive filesystems (Windows/macOS).
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
     ports:
       - "8080:8080"
 
@@ -41,9 +45,10 @@ services:
 #      context: .
 #      dockerfile: Dockerfile
 #    environment:
-#      ConnectionStrings__Supabase: ${SUPABASE_DB_URL_DOTNET}
+#      ConnectionStrings__Sentinel: ${SENTINEL_DB_CONNECTION}
 #      Keycloak__Authority: "http://keycloak:8080/realms/sentinel"
 #      Keycloak__Audience: "sentinel-api"
+#      Keycloak__AdminClientSecret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
 #    depends_on:
 #      keycloak:
 #        condition: service_started
@@ -52,3 +57,4 @@ services:
 
 volumes:
   neo4j-data:
+  keycloak-data:
