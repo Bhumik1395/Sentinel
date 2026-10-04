@@ -10,6 +10,8 @@ using Sentinel.Identity.Data;
 using Sentinel.Identity.Organizations;
 using Sentinel.Identity.SupportEngagements;
 using Sentinel.Licensing;
+using Sentinel.Identity.Keycloak;
+using Sentinel.Identity.Onboarding;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,20 +43,36 @@ builder.Services.AddAuthorization(options =>
         p.RequireRole("owner", "cso", "security-administrator"));
     options.AddPolicy("AnyOrganizationRole", p =>
         p.RequireRole("cso", "security-administrator", "security-analyst"));
+    options.AddPolicy("CanManageUser", p => p.AddRequirements(new CanManageUserRequirement()));
 });
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IOrganizationContext, OrganizationContext>();
 builder.Services.AddSingleton<ISentinelDataSource, SentinelDataSource>();
 builder.Services.AddScoped<IOrganizationsService, OrganizationsService>();
-builder.Services.AddScoped<IKeycloakAdminProvisioningService, StubKeycloakAdminProvisioningService>();
+
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddScoped<IKeycloakAdminProvisioningService, StubKeycloakAdminProvisioningService>();
+}
+else
+{
+    builder.Services.AddHttpClient<KeycloakUserProvisioningService>(client =>
+    {
+        client.BaseAddress = new Uri(builder.Configuration["Keycloak:AdminBaseUrl"]
+            ?? throw new InvalidOperationException("Keycloak:AdminBaseUrl is missing."));
+    });
+    builder.Services.AddScoped<IKeycloakAdminProvisioningService>(
+        sp => sp.GetRequiredService<KeycloakUserProvisioningService>());
+}
+
 builder.Services.AddScoped<ISupportEngagementService, SupportEngagementService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 builder.Services.AddSingleton<IAuthorizationHandler, SameOrganizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, CanManageUserHandler>();
 builder.Services.AddControllers();
-
+builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -91,6 +109,15 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+if (!app.Environment.IsEnvironment("Testing")
+    && app.Services.GetRequiredService<IKeycloakAdminProvisioningService>()
+        is StubKeycloakAdminProvisioningService)
+{
+    throw new InvalidOperationException(
+        "StubKeycloakAdminProvisioningService is wired outside the Testing environment. " +
+        "This creates fake Keycloak accounts on real onboarding approvals.");
+}
 
 if (app.Environment.IsDevelopment())
 {

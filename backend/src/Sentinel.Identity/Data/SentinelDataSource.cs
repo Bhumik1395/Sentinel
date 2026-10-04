@@ -14,9 +14,9 @@ public class SentinelDataSource : ISentinelDataSource
 
     public SentinelDataSource(IConfiguration configuration)
     {
-        _connectionString = configuration.GetConnectionString("Supabase")
+        _connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException(
-                "ConnectionStrings:Supabase is missing. Check appsettings.json / environment variables.");
+                "ConnectionStrings:Postgres is missing. Check appsettings.json / environment variables.");
     }
 
     public NpgsqlConnection CreateConnection() => new(_connectionString);

@@ -1,0 +1,31 @@
+{
+    "name": "sentinel-desktop",
+    "version": "0.1.0",
+    "private": true,
+    "main": "dist-electron/main.js",
+    "scripts": {
+        "predev": "tsc -p electron/tsconfig.json",
+        "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+        "build:renderer": "vite build",
+        "build:electron": "tsc -p electron/tsconfig.json",
+        "build": "npm run build:renderer && npm run build:electron",
+        "package": "npm run build && electron-builder"
+    },
+    "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^7.18.4"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.1",
+        "concurrently": "^8.2.2",
+        "cross-env": "^7.0.3",
+        "electron": "^32.0.0",
+        "electron-builder": "^25.0.0",
+        "typescript": "^5.5.4",
+        "vite": "^5.4.0",
+        "wait-on": "^7.2.0"
+    }
+}

@@ -1,0 +1,319 @@
+:root {
+    --bg: #14171C;
+    --surface: #1B1F26;
+    --surface-raised: #232833;
+    --border: #2C323D;
+    --ink: #E6E9EE;
+    --ink-muted: #8A93A3;
+    --accent: #4D8DFF;
+
+    --sev-informational: #6B7280;
+    --sev-low: #4D8DFF;
+    --sev-medium: #E0A93A;
+    --sev-high: #E0713D;
+    --sev-critical: #E0475A;
+
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+    --radius-sm: 3px;
+    /* deliberately small - this is not the rounded SaaS-card look */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+}
+
+body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-feature-settings: "tnum" 1;
+    /* tabular figures for counts/timestamps */
+}
+
+/* Focus visibility is non-negotiable on a security tool - never suppress this */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+.app-shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    height: 100vh;
+}
+
+.app-nav {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: var(--space-4);
+}
+
+.app-nav-scope {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-bottom: var(--space-6);
+}
+
+.nav-link {
+    display: block;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.nav-link:hover {
+    background: var(--surface-raised);
+}
+
+.app-main {
+    overflow: auto;
+}
+
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--border);
+}
+
+.app-role {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--ink-muted);
+}
+
+.app-user {
+    font-size: 13px;
+    color: var(--ink-muted);
+}
+
+/* frontend/src/theme/tokens.css — append everything below */
+.page-pad {
+    padding: var(--space-6);
+}
+
+.page-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+}
+
+.nav-link-active {
+    background: var(--surface-raised);
+    color: var(--accent);
+}
+
+.metric-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+}
+
+.metric-cell {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: var(--space-4);
+}
+
+.metric-value {
+    font-size: 28px;
+    font-family: var(--font-mono);
+}
+
+.metric-value-critical {
+    color: var(--sev-critical);
+}
+
+.metric-label {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+}
+
+.metric-sub {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+}
+
+.skeleton-block {
+    height: 72px;
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+}
+
+.error-box {
+    border: 1px solid var(--sev-high);
+    border-radius: var(--radius-sm);
+    padding: var(--space-4);
+}
+
+.error-title {
+    margin: 0 0 var(--space-2) 0;
+}
+
+.error-detail {
+    margin: 0 0 var(--space-3) 0;
+    color: var(--ink-muted);
+    font-size: 13px;
+}
+
+.empty-box {
+    padding: var(--space-8);
+    text-align: center;
+    color: var(--ink-muted);
+}
+
+.empty-title {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--ink);
+}
+
+.empty-detail {
+    margin: 0;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    cursor: pointer;
+}
+
+.btn-secondary {
+    background: var(--surface-raised);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    cursor: pointer;
+}
+
+.btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.table-controls {
+    display: flex;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.search-input,
+.filter-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.search-input {
+    flex: 1;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.data-table th {
+    text-align: left;
+    color: var(--ink-muted);
+    font-weight: 500;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.mono-cell {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+}
+
+.occurrence-count {
+    color: var(--ink-muted);
+    font-size: 12px;
+}
+
+.sev-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+}
+
+.sev-critical {
+    background: rgba(224, 71, 90, 0.15);
+    color: var(--sev-critical);
+}
+
+.sev-high {
+    background: rgba(224, 113, 61, 0.15);
+    color: var(--sev-high);
+}
+
+.sev-medium {
+    background: rgba(224, 169, 58, 0.15);
+    color: var(--sev-medium);
+}
+
+.sev-low {
+    background: rgba(77, 141, 255, 0.15);
+    color: var(--sev-low);
+}
+
+.sev-informational {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--sev-informational);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.page-indicator {
+    font-size: 13px;
+    color: var(--ink-muted);
+}
