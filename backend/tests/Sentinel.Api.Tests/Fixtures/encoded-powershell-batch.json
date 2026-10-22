@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "batchId": "c5da1cb0-5c05-4c2f-a80d-8b35dc09dc76",
+  "events": [
+    {
+      "eventId": "simulation:encoded-powershell:001",
+      "eventType": "POWERSHELL_EXECUTION",
+      "source": "AMSI",
+      "severity": "HIGH",
+      "occurredAt": "2026-10-22T00:00:00Z",
+      "processName": "powershell.exe",
+      "commandLine": "powershell.exe -NoProfile -EncodedCommand SQBFAFgA",
+      "raw": {
+        "simulation": true,
+        "scenario": "encoded-powershell"
+      }
+    }
+  ]
+}

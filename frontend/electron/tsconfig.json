@@ -13,6 +13,7 @@
     },
     "include": [
         "main.ts",
+        "auth.ts",
         "preload.ts"
     ]
 }

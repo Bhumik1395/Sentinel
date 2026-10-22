@@ -105,4 +105,16 @@ public class KeycloakUserProvisioningService : IKeycloakAdminProvisioningService
 
         return new ProvisionedUser(keycloakId, tempPassword);
     }
+
+    public async Task DeleteUserAsync(Guid keycloakUserId)
+    {
+        var response = await SendAsync(HttpMethod.Delete, $"/admin/realms/{_realm}/users/{keycloakUserId}", await GetAdminTokenAsync());
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task SetUserEnabledAsync(Guid keycloakUserId, bool enabled)
+    {
+        var response = await SendAsync(HttpMethod.Put, $"/admin/realms/{_realm}/users/{keycloakUserId}", await GetAdminTokenAsync(), new { enabled });
+        response.EnsureSuccessStatusCode();
+    }
 }

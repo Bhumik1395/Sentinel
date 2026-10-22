@@ -40,11 +40,12 @@ public class OrganizationContext : IOrganizationContext
         ? null
         : Guid.Parse(orgClaim);
 
-    var subClaim = user.FindFirst("sub")?.Value
+    var subClaim = user.FindFirst("sentinel_user_id")?.Value
+        ?? user.FindFirst("sub")?.Value
         ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
     UserId = Guid.TryParse(subClaim, out var parsed)
         ? parsed
         : null;
     }
-}   
+}

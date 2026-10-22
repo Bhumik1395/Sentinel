@@ -9,7 +9,10 @@ public interface ILicenseService
 
     Task UpdateEndpointCapAsync(Guid organizationId, int newCap);
 
-    Task<RegisterEndpointResult> RegisterEndpointAsync(RegisterEndpointRequest request);
+    Task<RegisterEndpointResult> RegisterEndpointAsync(Guid organizationId, RegisterEndpointRequest request);
+    Task<bool> RetireEndpointAsync(Guid organizationId, Guid endpointId);
+    Task RenewAsync(Guid organizationId, DateTimeOffset? expiresAt);
+    Task<int> ExpireDueLicensesAsync();
 }
 
 public class LicenseService : ILicenseService
@@ -69,7 +72,7 @@ FROM licenses WHERE organization_id = @orgId",
         await cmd.ExecuteNonQueryAsync();
     }
 
-    public async Task<RegisterEndpointResult> RegisterEndpointAsync(RegisterEndpointRequest request)
+    public async Task<RegisterEndpointResult> RegisterEndpointAsync(Guid organizationId, RegisterEndpointRequest request)
     {
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
@@ -86,7 +89,7 @@ FROM licenses WHERE organization_id = @orgId",
 FROM licenses WHERE organization_id = @orgId FOR UPDATE",
             conn,
             tx);
-        lockCmd.Parameters.AddWithValue("orgId", request.OrganizationId);
+        lockCmd.Parameters.AddWithValue("orgId", organizationId);
 
         await using var reader = await lockCmd.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
@@ -127,7 +130,7 @@ VALUES (@id, @orgId, @hostname, @agentVersion)",
             tx))
         {
             insertCmd.Parameters.AddWithValue("id", endpointId);
-            insertCmd.Parameters.AddWithValue("orgId", request.OrganizationId);
+            insertCmd.Parameters.AddWithValue("orgId", organizationId);
             insertCmd.Parameters.AddWithValue("hostname", request.Hostname);
             insertCmd.Parameters.AddWithValue("agentVersion", request.AgentVersion);
             await insertCmd.ExecuteNonQueryAsync();
@@ -138,12 +141,37 @@ VALUES (@id, @orgId, @hostname, @agentVersion)",
             conn,
             tx))
         {
-            updateCmd.Parameters.AddWithValue("orgId", request.OrganizationId);
+            updateCmd.Parameters.AddWithValue("orgId", organizationId);
             await updateCmd.ExecuteNonQueryAsync();
         }
 
         await tx.CommitAsync();
 
         return new RegisterEndpointResult(RegistrationOutcome.Registered, endpointId);
+    }
+
+    public async Task<bool> RetireEndpointAsync(Guid organizationId, Guid endpointId)
+    {
+        await using var conn = _dataSource.CreateConnection(); await conn.OpenAsync(); await using var tx = await conn.BeginTransactionAsync();
+        await using var retire = new NpgsqlCommand("UPDATE endpoints SET status = 'RETIRED' WHERE id = @id AND organization_id = @org AND status <> 'RETIRED'", conn, tx);
+        retire.Parameters.AddWithValue("id", endpointId); retire.Parameters.AddWithValue("org", organizationId);
+        if (await retire.ExecuteNonQueryAsync() == 0) { await tx.RollbackAsync(); return false; }
+        await using var count = new NpgsqlCommand("UPDATE licenses SET current_endpoint_count = current_endpoint_count - 1 WHERE organization_id = @org", conn, tx);
+        count.Parameters.AddWithValue("org", organizationId); await count.ExecuteNonQueryAsync(); await tx.CommitAsync(); return true;
+    }
+
+    public async Task RenewAsync(Guid organizationId, DateTimeOffset? expiresAt)
+    {
+        await using var conn = _dataSource.CreateConnection(); await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand("UPDATE licenses SET status='ACTIVE', suspended_at=NULL, renewed_at=now(), expires_at=@expires WHERE organization_id=@org", conn);
+        cmd.Parameters.AddWithValue("org", organizationId); cmd.Parameters.AddWithValue("expires", (object?)expiresAt ?? DBNull.Value);
+        if (await cmd.ExecuteNonQueryAsync() == 0) throw new InvalidOperationException("No license exists for this organization.");
+    }
+
+    public async Task<int> ExpireDueLicensesAsync()
+    {
+        await using var conn = _dataSource.CreateConnection(); await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand("UPDATE licenses SET status='EXPIRED' WHERE status='ACTIVE' AND expires_at IS NOT NULL AND expires_at <= now()", conn);
+        return await cmd.ExecuteNonQueryAsync();
     }
 }

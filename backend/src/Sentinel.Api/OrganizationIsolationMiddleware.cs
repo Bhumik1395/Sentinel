@@ -1,5 +1,8 @@
 using Sentinel.Identity;
 using Sentinel.Identity.SupportEngagements;
+using Sentinel.Identity.Data;
+using Npgsql;
+using System.Security.Claims;
 
 namespace Sentinel.Api;
 
@@ -12,7 +15,8 @@ public class OrganizationIsolationMiddleware
     public async Task InvokeAsync(
         HttpContext context,
         IOrganizationContext orgContext,
-        ISupportEngagementService engagements)
+        ISupportEngagementService engagements,
+        ISentinelDataSource dataSource)
     {
         if (!context.User.Identity?.IsAuthenticated ?? true)
         {
@@ -20,6 +24,37 @@ public class OrganizationIsolationMiddleware
             return;
         }
 
+        // Claims are not trusted as tenant identity.  Resolve Keycloak's subject to
+        // the local user record on every authenticated request and overwrite the
+        // effective tenant/role claims before any controller or policy reads them.
+        var subject = context.User.FindFirst("sub")?.Value ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+        await using (var connection = dataSource.CreateConnection())
+        {
+            await connection.OpenAsync(context.RequestAborted);
+            await using var command = new NpgsqlCommand("SELECT id,organization_id,role::text,status::text FROM users WHERE keycloak_user_id=@sub", connection);
+            command.Parameters.AddWithValue("sub", subject);
+            await using var reader = await command.ExecuteReaderAsync(context.RequestAborted);
+            if (!await reader.ReadAsync(context.RequestAborted) || reader.GetString(3) != "ACTIVE")
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+            var identity = (ClaimsIdentity)context.User.Identity!;
+            foreach (var claim in context.User.FindAll("sentinel_user_id").Concat(context.User.FindAll("organizationId")).ToArray()) identity.RemoveClaim(claim);
+            identity.AddClaim(new Claim("sentinel_user_id", reader.GetGuid(0).ToString()));
+            if (!reader.IsDBNull(1)) identity.AddClaim(new Claim("organizationId", reader.GetGuid(1).ToString()));
+            var role = reader.GetString(2).ToLowerInvariant().Replace('_', '-');
+            foreach (var claim in context.User.FindAll(ClaimTypes.Role).ToArray()) identity.RemoveClaim(claim);
+            identity.AddClaim(new Claim(ClaimTypes.Role, role));
+        }
+
+        // Re-read the resolved context after claims have been normalized.
+        orgContext = new OrganizationContext(context.RequestServices.GetRequiredService<IHttpContextAccessor>());
         if (orgContext.Role == "owner")
         {
             // Owner genuinely bypasses org boundaries; unchanged from Phase 1.
@@ -45,10 +80,6 @@ public class OrganizationIsolationMiddleware
                 return;
             }
 
-            // TODO(Phase 3+): once JWTs carry a stable internal user ID claim wired
-            // to the `users` table, replace this placeholder lookup. For now this
-            // assumes a `sub`-to-users.id mapping exists; flag to whoever wires
-            // Keycloak protocol mappers in Phase 3 if that assumption doesn't hold.
             var supportUserId = orgContext.UserId 
                 ?? throw new UnauthorizedAccessException("Token contains no resolvable user identity.");
             var active = await engagements.HasActiveEngagementAsync(supportUserId, routeOrgId);

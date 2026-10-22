@@ -24,4 +24,14 @@ jobs:
         run: dotnet build Sentinel.sln --no-restore
 
       - name: Test
-        run: dotnet test Sentinel.sln --no-build --verbosity normal
+        run: |
+          test -n "$(find backend/tests -name '*Tests.csproj' -print -quit)"
+          dotnet test Sentinel.sln --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/**/*.trx
+          if-no-files-found: error

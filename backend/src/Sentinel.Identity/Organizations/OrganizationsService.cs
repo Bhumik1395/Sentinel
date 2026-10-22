@@ -28,12 +28,16 @@ public class OrganizationsService : IOrganizationsService
         if (request.EndpointCap <= 0)
             throw new ArgumentException("endpointCap must be a positive integer.");
 
+        var orgId = Guid.NewGuid();
+        var slug = Slugify(request.Name);
+        // Provisioning is an external side effect.  If the database transaction fails,
+        // compensate by removing the Keycloak identity instead of leaving an orphan.
+        var provisioned = await _provisioning.ProvisionUserWithPasswordAsync(request.CsoEmail, "cso", orgId);
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
-
-        var orgId = Guid.NewGuid();
-        var slug = Slugify(request.Name);
+        try
+        {
         await using (var cmd = new NpgsqlCommand(
             "INSERT INTO organizations (id, name, slug) VALUES (@id, @name, @slug)",
             conn,
@@ -47,7 +51,6 @@ public class OrganizationsService : IOrganizationsService
 
         // 2. Provision the first CSO (PRD section 6, TRD section 22 - Owner assigns first CSO, not
         // a Security Administrator; see the correction note at the top of this doc).
-        var provisioned = await _provisioning.ProvisionUserWithPasswordAsync(request.CsoEmail, "cso", orgId);
         var csoKeycloakId = provisioned.KeycloakId;
         var csoUserId = Guid.NewGuid();
         await using (var cmd = new NpgsqlCommand(
@@ -79,8 +82,14 @@ VALUES (@id, @orgId, @cap)",
         }
 
         await tx.CommitAsync();
-
         return new CreateOrganizationResult(orgId, csoUserId, licenseId, provisioned.TemporaryPassword);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            try { await _provisioning.DeleteUserAsync(provisioned.KeycloakId); } catch { /* retry through operational reconciliation */ }
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<Organization>> ListOrganizationsAsync()
@@ -110,7 +119,7 @@ VALUES (@id, @orgId, @cap)",
         await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "SELECT id, name, slug, created_at FROM organizations WHERE id = @id",
+            "SELECT id, name, slug, created_at FROM organizations WHERE id = @id AND company_scope = false",
             conn);
         cmd.Parameters.AddWithValue("id", id);
 

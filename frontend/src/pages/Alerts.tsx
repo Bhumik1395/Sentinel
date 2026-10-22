@@ -6,6 +6,8 @@
 // not a nicety, so polling is built in from the start rather than added later.
 import { useEffect, useMemo, useState } from "react";
 import { useLoadState } from "../lib/useLoadState";
+import { apiRequest } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 
 type Severity = "INFORMATIONAL" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -25,11 +27,11 @@ interface Alert {
 const SEVERITY_ORDER: Severity[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"];
 const PAGE_SIZE = 25;
 
-// Stand-in for GET /alerts. Swap for a real fetch once the backend endpoint
-// exists - the table/filter/sort/pagination code below never needs to change.
-async function fetchAlerts(): Promise<Alert[]> {
-    await new Promise((r) => setTimeout(r, 400));
-    return [];
+interface AlertsResponse { items: Alert[] }
+
+async function fetchAlerts(accessToken: string | null): Promise<Alert[]> {
+    if (!accessToken) return [];
+    return (await apiRequest<AlertsResponse>(accessToken, "/alerts")).items;
 }
 
 function SeverityBadge({ severity }: { severity: Severity }) {
@@ -41,19 +43,44 @@ function SeverityBadge({ severity }: { severity: Severity }) {
 }
 
 export function Alerts() {
-    const { state, reload } = useLoadState(fetchAlerts, (a) => a.length === 0);
+    const auth = useAuth();
+    const { state, reload } = useLoadState(() => fetchAlerts(auth.accessToken), (a) => a.length === 0, [auth.accessToken]);
     const [search, setSearch] = useState("");
     const [severityFilter, setSeverityFilter] = useState<Severity | "ALL">("ALL");
     const [sortBy, setSortBy] = useState<"severity" | "timestamp">("severity");
     const [page, setPage] = useState(0);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+
+    const updateStatus = async (id: string, status: Alert["status"]) => {
+        if (!auth.accessToken) return;
+        setUpdatingId(id);
+        setActionError(null);
+        try {
+            await apiRequest<void>(auth.accessToken, `/alerts/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+            reload(true);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "Unable to update the alert status.");
+        } finally { setUpdatingId(null); }
+    };
 
     // PRD/TRD: alerts poll every 5 seconds. Silent background refresh, not a
     // full loading-state reset - don't show the skeleton again just because
     // the poll ticked, that would be visually disruptive on a page an
     // analyst is actively reading.
     useEffect(() => {
-        const interval = setInterval(reload, 5000);
-        return () => clearInterval(interval);
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const updatePolling = () => {
+            if (interval) clearInterval(interval);
+            interval = undefined;
+            if (document.visibilityState === "visible") interval = setInterval(() => reload(true), 5000);
+        };
+        updatePolling();
+        document.addEventListener("visibilitychange", updatePolling);
+        return () => {
+            if (interval) clearInterval(interval);
+            document.removeEventListener("visibilitychange", updatePolling);
+        };
     }, [reload]);
 
     const alerts = state.status === "ready" ? state.data : [];
@@ -101,6 +128,7 @@ export function Alerts() {
                     <option value="timestamp">Sort by newest</option>
                 </select>
             </div>
+            {actionError && <div className="error-box compact-error" role="alert"><p className="error-detail">{actionError}</p></div>}
 
             {state.status === "loading" && <div className="skeleton-block" style={{ height: 300 }} />}
 
@@ -108,7 +136,7 @@ export function Alerts() {
                 <div className="error-box">
                     <p className="error-title">Unable to load alerts.</p>
                     <p className="error-detail">{state.message}</p>
-                    <button className="btn-primary" onClick={reload}>Retry</button>
+                    <button className="btn-primary" onClick={() => reload()}>Retry</button>
                 </div>
             )}
 
@@ -138,7 +166,7 @@ export function Alerts() {
                                     <td>{a.detectionSource}</td>
                                     <td className="mono-cell">{a.mitreTechnique}</td>
                                     <td className="mono-cell">{new Date(a.timestamp).toLocaleTimeString()}</td>
-                                    <td>{a.status.replace("_", " ")}</td>
+                                    <td><select aria-label={`Change status for ${a.name}`} className="status-select" value={a.status} disabled={updatingId === a.id} onChange={(event) => void updateStatus(a.id, event.target.value as Alert["status"])}><option value="OPEN">Open</option><option value="ACKNOWLEDGED">Acknowledged</option><option value="IN_INVESTIGATION">Investigating</option><option value="RESOLVED">Resolved</option><option value="FALSE_POSITIVE">False positive</option></select></td>
                                 </tr>
                             ))}
                         </tbody>

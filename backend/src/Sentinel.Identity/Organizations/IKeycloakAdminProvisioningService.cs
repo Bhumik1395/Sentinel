@@ -10,4 +10,6 @@ public interface IKeycloakAdminProvisioningService
         string email,
         string role,
         Guid organizationId);
+    Task DeleteUserAsync(Guid keycloakUserId);
+    Task SetUserEnabledAsync(Guid keycloakUserId, bool enabled);
 }

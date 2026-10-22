@@ -17,8 +17,8 @@ export function useLoadState<T>(
 ) {
     const [state, setState] = useState<LoadState<T>>({ status: "loading" });
 
-    const load = useCallback(() => {
-        setState({ status: "loading" });
+    const load = useCallback((background = false) => {
+        if (!background) setState({ status: "loading" });
         fetcher()
             .then((data) => setState(isEmpty(data) ? { status: "empty" } : { status: "ready", data }))
             .catch((e) => setState({ status: "error", message: e instanceof Error ? e.message : "Unknown error" }));

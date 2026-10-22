@@ -2,6 +2,8 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Sentinel.Api;
@@ -15,6 +17,10 @@ using Sentinel.Identity.SupportEngagements;
 using Sentinel.Licensing;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https =>
+    https.ClientCertificateMode = ClientCertificateMode.AllowCertificate));
+
+StartupConfigurationValidator.Validate(builder.Configuration, builder.Environment);
 
 var keycloakAuthority = builder.Configuration["Keycloak:Authority"]!;
 var keycloakAudience = builder.Configuration["Keycloak:Audience"]!;
@@ -71,6 +77,20 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod()));
 
+// Only explicitly configured reverse proxies may supply the client address and scheme.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    var knownProxies = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    foreach (var proxy in knownProxies)
+    {
+        if (System.Net.IPAddress.TryParse(proxy, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+});
+
 // ---------------------------------------------------------------- Rate limiting
 // The application form is public; keep it from being used as a spam cannon.
 builder.Services.AddRateLimiter(options =>
@@ -84,11 +104,16 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 5,
                 Window = TimeSpan.FromMinutes(10)
             }));
+    options.AddPolicy("enrollment", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });
 
 // ---------------------------------------------------------------- Errors
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddHealthChecks().AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy());
+builder.Logging.AddJsonConsole();
 
 // ---------------------------------------------------------------- Services
 builder.Services.AddHttpContextAccessor();
@@ -98,7 +123,15 @@ builder.Services.AddScoped<IOrganizationsService, OrganizationsService>();
 builder.Services.AddScoped<IApplicationsService, ApplicationsService>();
 builder.Services.AddScoped<ISupportEngagementService, SupportEngagementService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
+builder.Services.AddScoped<IEnrollmentTokenService, EnrollmentTokenService>();
+builder.Services.AddScoped<IEndpointCertificateService, EndpointCertificateService>();
+builder.Services.AddScoped<IAgentCertificateValidator, AgentCertificateValidator>();
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IDetectionService, DetectionService>();
+builder.Services.AddSingleton<ICommandSigningService, CommandSigningService>();
+builder.Services.AddHostedService<TelemetryRetentionService>();
+builder.Services.AddHostedService<LicenseExpiryService>();
 builder.Services.AddSingleton<IAuthorizationHandler, SameOrganizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, CanManageUserHandler>();
 
@@ -159,11 +192,17 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+else
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
 app.UseCors("Dashboard");
@@ -173,5 +212,7 @@ app.UseMiddleware<OrganizationIsolationMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health/live");
+app.MapHealthChecks("/health/ready");
 
 app.Run();

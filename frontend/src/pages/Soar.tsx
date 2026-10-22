@@ -1,0 +1,5 @@
+import { useEffect, useState } from "react";
+import { apiRequest } from "../lib/api";
+import { useAuth } from "../lib/authContext";
+type Action={id:string;endpointId:string;actionType:string;status:string;justification:string;requestedAt:string};
+export function Soar(){const auth=useAuth();const[items,setItems]=useState<Action[]>([]);const[error,setError]=useState<string>();const[loading,setLoading]=useState(true);useEffect(()=>{if(!auth.accessToken)return;apiRequest<{items:Action[]}>(auth.accessToken,"/soar").then(x=>setItems(x.items)).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[auth.accessToken]);return <section className="page-pad"><p className="eyebrow">CONTROLLED RESPONSE</p><h1 className="page-title">SOAR approvals</h1>{loading?<p>Loading response requests…</p>:error?<p className="error-detail">{error}</p>:items.length===0?<p className="empty-detail">No response actions are awaiting approval or execution.</p>:<div className="data-list">{items.map(a=><article className="data-card" key={a.id}><strong>{a.actionType.replaceAll("_"," ")}</strong><span>{a.status}</span><small>{a.justification}</small></article>)}</div>}</section>}

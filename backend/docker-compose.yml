@@ -1,5 +1,4 @@
 # backend/docker-compose.yml
-version: "3.9"
 services:
   redis:
     image: redis:7
@@ -33,7 +32,7 @@ services:
       #   KC_DB_SCHEMA: keycloak          (run: CREATE SCHEMA keycloak;)
       #   KC_DB_USERNAME / KC_DB_PASSWORD
     volumes:
-      - keycloak-data:/opt/keycloak/data/h2
+      - keycloak-data:/opt/keycloak/data
       # Directory name is lowercase to match the repo (backend/keycloak). The old
       # ./Keycloak path only worked on case-insensitive filesystems (Windows/macOS).
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json

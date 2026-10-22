@@ -25,7 +25,7 @@ CREATE TYPE user_role AS ENUM (
   'OWNER', 'SUPPORT_TEAM', 'CSO', 'SECURITY_ADMINISTRATOR', 'SECURITY_ANALYST'
 );
 CREATE TYPE user_status AS ENUM ('ACTIVE', 'DEACTIVATED');
-CREATE TYPE endpoint_status AS ENUM ('HEALTHY', 'DEGRADED', 'OFFLINE');
+CREATE TYPE endpoint_status AS ENUM ('HEALTHY', 'DEGRADED', 'OFFLINE', 'RETIRED');
 CREATE TYPE severity_level AS ENUM ('INFORMATIONAL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
 CREATE TYPE sues_event_type AS ENUM (
   'PROCESS_START', 'PROCESS_STOP', 'NETWORK_CONNECTION', 'DNS_QUERY',
@@ -83,6 +83,19 @@ CREATE TABLE users (
     OR
     (role IN ('CSO', 'SECURITY_ADMINISTRATOR', 'SECURITY_ANALYST') AND organization_id IS NOT NULL)
   )
+);
+
+CREATE TABLE invitations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email varchar(320) NOT NULL,
+  role user_role NOT NULL,
+  invited_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  keycloak_user_id varchar(120),
+  status varchar(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACCEPTED','CANCELLED','EXPIRED')),
+  expires_at timestamptz NOT NULL,
+  accepted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- FIX #4: status + renamed timestamps so "still active" is a real,
@@ -164,8 +177,7 @@ CREATE TABLE endpoints (
   last_heartbeat_at timestamptz,
   registered_at timestamptz NOT NULL DEFAULT now(),
   certificate_fingerprint varchar(128),
-  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-  UNIQUE (organization_id, hostname)
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE endpoint_heartbeats (
@@ -202,11 +214,32 @@ CREATE TABLE events (
   destination_port integer CHECK (destination_port IS NULL OR destination_port BETWEEN 0 AND 65535),
   protocol varchar(20),
   file_path text,
+  file_hash varchar(128),
   registry_key text,
   alert_id uuid,
   incident_id uuid,
   raw jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE (organization_id, event_id)
+);
+
+CREATE TABLE telemetry_ingestion_batches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  endpoint_id uuid NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
+  batch_id uuid NOT NULL,
+  payload_hash varchar(64) NOT NULL,
+  accepted_count integer NOT NULL DEFAULT 0,
+  rejected_count integer NOT NULL DEFAULT 0,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (endpoint_id, batch_id)
+);
+
+CREATE TABLE telemetry_rejections (
+  id bigserial PRIMARY KEY,
+  endpoint_id uuid NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
+  batch_id uuid NOT NULL,
+  event_id varchar(120),
+  reason varchar(200) NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE detection_rules (
@@ -250,6 +283,7 @@ CREATE TABLE alerts (
   first_seen_at timestamptz NOT NULL,
   last_seen_at timestamptz NOT NULL,
   evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+  dedupe_key varchar(128) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -322,10 +356,24 @@ CREATE TABLE agent_commands (
   command_type soar_action_type NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   status varchar(40) NOT NULL DEFAULT 'PENDING',
+  nonce varchar(80) NOT NULL,
+  expires_at timestamptz NOT NULL,
+  signature varchar(128),
   created_at timestamptz NOT NULL DEFAULT now(),
   fetched_at timestamptz,
   acknowledged_at timestamptz,
-  result jsonb
+  result jsonb,
+  result_reported_at timestamptz,
+  UNIQUE (endpoint_id, nonce)
+);
+
+CREATE TABLE command_signing_keys (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key_id varchar(80) NOT NULL UNIQUE,
+  secret_hash varchar(128) NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  retired_at timestamptz
 );
 
 CREATE TABLE deception_assets (
@@ -390,17 +438,38 @@ CREATE TABLE platform_settings (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE graph_projection_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  status varchar(24) NOT NULL CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED')),
+  started_at timestamptz,
+  completed_at timestamptz,
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE operational_checks (
+  check_name varchar(120) PRIMARY KEY,
+  status varchar(24) NOT NULL CHECK (status IN ('HEALTHY','DEGRADED','FAILED')),
+  detail text,
+  observed_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX idx_users_org_role ON users (organization_id, role);
+CREATE INDEX idx_invitations_org_email ON invitations (organization_id, email) WHERE status = 'PENDING';
 CREATE INDEX idx_support_engagements_active ON support_engagements (support_user_id, organization_id, status, expires_at);
 CREATE INDEX idx_endpoints_org_status ON endpoints (organization_id, status);
+CREATE UNIQUE INDEX uq_endpoints_active_hostname ON endpoints (organization_id, hostname) WHERE status <> 'RETIRED';
 CREATE INDEX idx_heartbeats_endpoint_received ON endpoint_heartbeats (endpoint_id, received_at DESC);
 CREATE INDEX idx_events_org_time ON events (organization_id, occurred_at DESC);
 CREATE INDEX idx_events_endpoint_time ON events (endpoint_id, occurred_at DESC);
 CREATE INDEX idx_events_type_time ON events (event_type, occurred_at DESC);
 CREATE INDEX idx_events_raw_gin ON events USING gin (raw);
+CREATE INDEX idx_telemetry_batches_endpoint_received ON telemetry_ingestion_batches (endpoint_id, received_at DESC);
 CREATE INDEX idx_iocs_active ON iocs (organization_id, type, expires_at);
 CREATE INDEX idx_alerts_org_status_severity ON alerts (organization_id, status, severity, last_seen_at DESC);
 CREATE INDEX idx_alerts_dedupe ON alerts (organization_id, rule_id, endpoint_id, user_id, last_seen_at DESC);
+CREATE UNIQUE INDEX uq_alerts_organization_dedupe_key ON alerts (organization_id, dedupe_key);
 CREATE INDEX idx_incidents_org_status ON incidents (organization_id, status, opened_at DESC);
 CREATE INDEX idx_soar_actions_org_status ON soar_actions (organization_id, status, requested_at DESC);
 CREATE INDEX idx_agent_commands_pending ON agent_commands (endpoint_id, status, created_at);
@@ -408,6 +477,7 @@ CREATE INDEX idx_deception_assets_org_status ON deception_assets (organization_i
 CREATE INDEX idx_reports_org_type ON reports (organization_id, type, created_at DESC);
 CREATE INDEX idx_audit_logs_org_time ON audit_logs (organization_id, created_at DESC);
 CREATE INDEX idx_audit_logs_action_time ON audit_logs (action, created_at DESC);
+CREATE INDEX idx_graph_projection_runs_org_created ON graph_projection_runs (organization_id, created_at DESC);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS trigger AS $$

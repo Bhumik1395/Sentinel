@@ -125,8 +125,8 @@ public class ApplicationsService : IApplicationsService
 
         await using var cmd = new NpgsqlCommand(
             @"UPDATE applications
-              SET status = 'APPROVED', created_organization_id = @orgId, updated_at = now()
-              WHERE id = @id",
+              SET status = 'APPROVED', created_organization_id = @orgId, reviewed_at = now(), updated_at = now()
+              WHERE id = @id AND status = 'IN_DISCUSSION'",
             conn);
 
         cmd.Parameters.AddWithValue("id", applicationId);

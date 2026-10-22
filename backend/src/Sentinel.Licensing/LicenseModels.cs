@@ -8,11 +8,9 @@ public record License(
     string Status
 );
 
-public record RegisterEndpointRequest(
-    Guid OrganizationId,
-    string Hostname,
-    string AgentVersion = "unknown"
-);
+public record RegisterEndpointRequest(string Hostname, string AgentVersion = "unknown");
+public record CreateEnrollmentTokenRequest(Guid OrganizationId, int ExpiresInMinutes = 60);
+public record RedeemEnrollmentTokenRequest(string Token, string Hostname, string AgentVersion = "unknown");
 
 public enum RegistrationOutcome
 {

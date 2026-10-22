@@ -13,4 +13,6 @@ public class StubKeycloakAdminProvisioningService : IKeycloakAdminProvisioningSe
                 "TempPassword123!"
             ));
     }
+    public Task DeleteUserAsync(Guid keycloakUserId) => Task.CompletedTask;
+    public Task SetUserEnabledAsync(Guid keycloakUserId, bool enabled) => Task.CompletedTask;
 }

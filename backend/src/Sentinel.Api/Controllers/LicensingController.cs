@@ -26,4 +26,11 @@ public class LicensingController : ControllerBase
         await _licenses.UpdateEndpointCapAsync(orgId, endpointCap);
         return NoContent();
     }
+
+    [HttpPost("{orgId:guid}/renew")]
+    public async Task<IActionResult> Renew(Guid orgId, [FromBody] DateTimeOffset? expiresAt)
+    {
+        await _licenses.RenewAsync(orgId, expiresAt);
+        return NoContent();
+    }
 }

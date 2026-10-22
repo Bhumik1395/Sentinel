@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Sentinel.Identity.Onboarding;
+using Sentinel.Identity;
 
 namespace Sentinel.Api.Controllers;
 
@@ -13,8 +14,9 @@ public record RejectApplicationRequest(string Reason);
 public class ApplicationsController : ControllerBase
 {
     private readonly IApplicationsService _applications;
+    private readonly IOrganizationContext _organization;
 
-    public ApplicationsController(IApplicationsService applications) => _applications = applications;
+    public ApplicationsController(IApplicationsService applications, IOrganizationContext organization) => (_applications, _organization) = (applications, organization);
 
     // Public: prospective customers apply without an account.
     [HttpPost]
@@ -46,9 +48,7 @@ public class ApplicationsController : ControllerBase
     [Authorize(Policy = "SentinelCompany")]
     public async Task<IActionResult> Review(Guid id)
     {
-        // reviewed_by references users(id), and Owner / Support accounts are not rows in
-        // `users` yet, so we cannot record the reviewer. Revisit once they are.
-        await _applications.MarkInReviewAsync(id, null);
+        await _applications.MarkInReviewAsync(id, _organization.UserId);
         return NoContent();
     }
 

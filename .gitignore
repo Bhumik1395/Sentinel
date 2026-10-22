@@ -1,3 +1,21 @@
-*.md
+# Local secrets
 backend/.env
-frontend/node_modules
+backend/.env.*
+!backend/.env.example
+
+# .NET build output
+**/bin/
+**/obj/
+
+# JavaScript dependencies and generated bundles
+frontend/node_modules/
+frontend/dist/
+frontend/dist-electron/
+
+# Tooling and OS files
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+.DS_Store
